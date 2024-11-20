@@ -57,6 +57,25 @@ export default {
           'circle-stroke-color': '#fff'
         }
       })
+
+      this.map.on('click', 'markers', (e) => {
+        const features = this.map.queryRenderedFeatures(e.point, { layers: ['markers'] })
+        const feature = features[0]
+        const coordinates = feature.geometry.coordinates.slice()
+        const properties = feature.properties
+
+        new Mapbox.Popup().setLngLat(coordinates).setHTML(`
+          <strong>ID:</strong> ${properties.id} <br />
+          <strong>Species Name:</strong> ${properties.scientificName} <br />
+          <strong>Genus:</strong> ${properties.genus} <br />
+          <strong>Family:</strong> ${properties.family} <br />
+          <strong>Country:</strong> ${properties.country} <br />
+          <strong>WaterBody:</strong> ${properties.waterBody} <br />
+          <strong>Location:</strong> ${properties.locality || 'Unknown Location'} <br />
+          <strong>Scientific Name Authorship:</strong> ${properties.scientificNameAuthorship}
+          `)
+          .addTo(this.map)
+      })
     })
   }
 }
