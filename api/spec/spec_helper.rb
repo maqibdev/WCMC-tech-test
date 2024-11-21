@@ -1,7 +1,9 @@
 # See https://rubydoc.info/gems/rspec-core/RSpec/Core/Configuration
 
-require 'pundit/rspec'
 require 'simplecov'
+require 'rails_helper'
+require 'shoulda/matchers'
+
 SimpleCov.start
 
 RSpec.configure do |config|
@@ -16,4 +18,6 @@ RSpec.configure do |config|
   config.shared_context_metadata_behavior = :apply_to_host_groups
   # config.profile_examples = 10
   config.order = :random
+  config.include Shoulda::Matchers::ActiveModel, type: :model
+  config.include Shoulda::Matchers::ActiveRecord, type: :model
 end
