@@ -55,7 +55,7 @@ export default {
   proxy: {
     '/api/': {
       target: process.env.RAILS_API_ENDPOINT,
-      pathRewrite: { '^/api/': '' }
+      pathRewrite: { '^/api/': '/v1/' }
     }
   },
 

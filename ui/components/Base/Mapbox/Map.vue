@@ -6,6 +6,7 @@
 
 <script>
 import Mapbox from 'mapbox-gl'
+import axios from 'axios'
 
 export default {
   props: {
@@ -123,44 +124,17 @@ export default {
           layers: ['markers']
         })
 
-        const uniqueFeatures = Array.from(
-          new Map(features.map(feature => [feature.properties.id, feature])).values()
-        )
+        const location = features[0]
+        const longitude = location.geometry.coordinates[0]
+        const latitude = location.geometry.coordinates[1]
 
-        const speciesList = uniqueFeatures.map(feature => ({
-          id: feature.properties.id,
-          scientificName: feature.properties.scientificName,
-          genus: feature.properties.genus,
-          family: feature.properties.family,
-          country: feature.properties.country,
-          waterBody: feature.properties.waterBody,
-          scientificNameAuthorship: feature.properties.scientificNameAuthorship
-        }))
-        const locationName = features[0].properties.locality || 'Unknown Location'
-
-        let currentPage = 1
-
-        const popup = new Mapbox.Popup()
-          .setLngLat(features[0].geometry.coordinates.slice())
-          .setHTML(this.generateTooltip(speciesList, locationName, currentPage))
-          .addTo(this.map)
-
-        popup.getElement().addEventListener('click', (event) => {
-          if (event.target.classList.contains('prev')) {
-            currentPage -= 1
-          } else if (event.target.classList.contains('next')) {
-            currentPage += 1
-          } else {
-            return
-          }
-
-          popup.setHTML(this.generateTooltip(speciesList, locationName, currentPage))
-        })
+        this.displayTooltip(longitude, latitude, location)
       })
 
       this.map.on('mouseenter', 'clusters', () => {
         this.map.getCanvas().style.cursor = 'pointer'
       })
+
       this.map.on('mouseleave', 'clusters', () => {
         this.map.getCanvas().style.cursor = ''
       })
@@ -168,32 +142,145 @@ export default {
   },
 
   methods: {
+    async fetchSpeciesByCoordinates (longitude, latitude) {
+      try {
+        const response = await axios.get('http://localhost:3000/v1/locations/species', {
+          params: { longitude, latitude }
+        })
+
+        return response.data
+      } catch (error) {
+        console.error('Error fetching species:', error)
+        return []
+      }
+    },
+
+    async fetchLocationsBySpecies (speciesName) {
+      try {
+        const response = await axios.get('http://localhost:3000/v1/species/locations', {
+          params: { scientificName: speciesName }
+        })
+
+        return response.data
+      } catch (error) {
+        console.error('Error fetching locations:', error)
+        return []
+      }
+    },
+
+    async displayTooltip (longitude, latitude, location) {
+      const speciesList = await this.fetchSpeciesByCoordinates(longitude, latitude)
+
+      const locationName = location.properties.locality || 'Unknown Location'
+      let currentSpeciesPage = 1
+      let currentLocationsPage = 1
+
+      const popup = new Mapbox.Popup()
+        .setLngLat([longitude, latitude])
+        .setHTML(
+          this.generateTooltip(speciesList, locationName, currentSpeciesPage)
+        )
+        .addTo(this.map)
+
+      let speciesName = null
+      let locations = []
+
+      popup.getElement().addEventListener('click', async (event) => {
+        if (event.target.classList.contains('prev')) {
+          if (currentSpeciesPage > 1) {
+            currentSpeciesPage -= 1
+            popup.setHTML(
+              this.generateTooltip(speciesList, locationName, currentSpeciesPage)
+            )
+          }
+        } else if (event.target.classList.contains('next')) {
+          if (currentSpeciesPage < speciesList.length) {
+            currentSpeciesPage += 1
+            popup.setHTML(
+              this.generateTooltip(speciesList, locationName, currentSpeciesPage)
+            )
+          }
+        } else if (event.target.classList.contains('ct-fetch-locations')) {
+          speciesName = event.target.dataset.species
+          locations = await this.fetchLocationsBySpecies(speciesName)
+          popup.setHTML(
+            this.generateLocationsTooltip(speciesName, locations, currentLocationsPage)
+          )
+        } else if (event.target.classList.contains('prev-locations')) {
+          if (currentLocationsPage > 1) {
+            currentLocationsPage -= 1
+            popup.setHTML(
+              this.generateLocationsTooltip(
+                speciesName,
+                locations,
+                currentLocationsPage
+              )
+            )
+          }
+        } else if (event.target.classList.contains('next-locations')) {
+          if (currentLocationsPage < Math.ceil(locations.length / 4)) {
+            currentLocationsPage += 1
+            popup.setHTML(
+              this.generateLocationsTooltip(
+                speciesName,
+                locations,
+                currentLocationsPage
+              )
+            )
+          }
+        }
+      })
+    },
+
     generateTooltip (speciesList, locationName, currentPage = 1) {
       const totalPages = speciesList.length
 
       const species = speciesList[currentPage - 1]
 
       const speciesHtml = `
-        <strong>ID:</strong> ${species.id} <br />
-        <strong>Species Name:</strong> ${species.scientificName} <br />
-        <strong>Genus:</strong> ${species.genus} <br />
-        <strong>Family:</strong> ${species.family} <br />
-        <strong>Country:</strong> ${species.country} <br />
-        <strong>WaterBody:</strong> ${species.waterBody} <br />
-        <strong>Location:</strong> ${locationName}
-        <strong>Scientific Name Authorship:</strong> ${species.scientificNameAuthorship}
+        <strong>ID:</strong> ${species.id} <br/>
+        <strong>Species Name:</strong> ${species.scientific_name} <br/>
+        <strong>Genus:</strong> ${species.genus} <br/>
+        <strong>Family:</strong> ${species.family} <br/>
+        <strong>Location:</strong> ${locationName} <br/>
+        <strong>Scientific Name Authorship:</strong> ${species.scientific_name_authorship} <br/>
+        <button class="ct-fetch-locations" data-species="${species.scientific_name}">View other locations</button>
       `
 
       const paginationHtml = `
-        <div class='ct-pagination'>
+        <div class="ct-pagination">
           ${currentPage > 1 ? '<button class="prev">Previous</button>' : ''}
           Page ${currentPage} of ${totalPages}
           ${currentPage < totalPages ? '<button class="next">Next</button>' : ''}
         </div>
       `
 
+      return `${speciesHtml}${paginationHtml}`
+    },
+
+    generateLocationsTooltip (speciesName, locations = [], currentPage = 1) {
+      const itemsPerPage = 4
+      const totalPages = Math.ceil(locations.length / itemsPerPage)
+
+      const startIndex = (currentPage - 1) * itemsPerPage
+      const endIndex = startIndex + itemsPerPage
+      const paginatedLocations = locations.slice(startIndex, endIndex)
+
+      const locationsHtml = paginatedLocations
+        .map(loc => `<li>${loc.locality || 'Unknown Locality'}</li>`)
+        .join('')
+
+      const paginationHtml = `
+        <div class="ct-pagination">
+          ${currentPage > 1 ? '<button class="prev-locations">Previous</button>' : ''}
+          Page ${currentPage} of ${totalPages}
+          ${currentPage < totalPages ? '<button class="next-locations">Next</button>' : ''}
+        </div>
+      `
+
       return `
-        ${speciesHtml}
+        <strong>Locations for species: ${speciesName}</strong>
+        <ul>${locationsHtml}</ul>
         ${paginationHtml}
       `
     }
@@ -232,5 +319,20 @@ export default {
 ::v-deep .ct-pagination button:disabled {
   background-color: #ccc;
   cursor: not-allowed;
+}
+
+::v-deep .ct-fetch-locations {
+  background: none;
+  color: #007bff;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  font-size: inherit;
+}
+
+::v-deep .ct-fetch-locations:hover {
+  color: #0056b3;
+  text-decoration: none;
 }
 </style>
