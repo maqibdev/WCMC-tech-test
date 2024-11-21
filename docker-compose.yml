@@ -9,6 +9,7 @@ services:
       - 3306:3306
     volumes:
       - postgresql-store:/var/lib/postgresql/data
+      - ./lib/data:/app/lib/data
   api:
     build: ./api/
     command: /bin/sh -c "rm -rf /app/tmp/pids/server.pid && bin/rails server -b 0.0.0.0 -p 3000"
