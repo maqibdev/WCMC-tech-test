@@ -1,24 +1,37 @@
-# README
+# WCMC Tech Test
 
-This README would normally document whatever steps are necessary to get the
-application up and running.
+## Rake Tasks
 
-Things you may want to cover:
+### Import Data from CSV to DB
 
-* Ruby version
+To import species and location data into the database from a CSV file, run the following command:
+```
+sudo docker exec -it wcmc-tech-test-main-api-1 bin/rails import:species_and_locations
+```
 
-* System dependencies
+---
 
-* Configuration
+## API Endpoints
 
-* Database creation
+### Location Endpoint
 
-* Database initialization
+This endpoint fetches species found at a given location. It is used to update the tooltip.
+```
+GET /locations/species?longitude=<longitude>&latitude=<latitude>
+```
 
-* How to run the test suite
+### Species Endpoint
 
-* Services (job queues, cache servers, search engines, etc.)
+This endpoint fetches all locations where a specific species is found, based on the scientific name of the species. It is used inside the tooltip with an additional button to view other locations where the species can be found.
+```
+GET /species/locations_by_name?scientificName=<species-scientific-name>
+```
 
-* Deployment instructions
+---
 
-* ...
+## Unit Tests
+
+To run unit tests for the project, use the following command:
+```
+sudo docker exec -it wcmc-tech-test-main-api-1 bundle exec rspec
+```
